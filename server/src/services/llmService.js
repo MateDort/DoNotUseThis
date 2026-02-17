@@ -11,7 +11,7 @@ export async function answerQuestion(question, transcript) {
   // 1. Try Gemini
   if (genAI) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
       const result = await model.generateContent(contextPrompt);
       const text = result.response.text();
       if (text && text.trim().length > 0) return text.trim();

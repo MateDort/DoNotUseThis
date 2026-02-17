@@ -3,41 +3,31 @@ import { toFile } from 'openai/uploads';
 
 let chunkIndex = 0;
 
-// Common Whisper hallucinations and YouTube/podcast filler phrases to filter out.
-// These appear when the audio is near-silent or contains background noise.
-const JUNK_PHRASES = [
-  'thank you for watching',
-  'thanks for watching',
-  'please subscribe',
-  'like and subscribe',
-  'hit the bell',
-  'hit the notification bell',
-  'check out the next video',
-  'see you in the next video',
-  'see you next time',
-  'don\'t forget to subscribe',
-  'leave a comment below',
-  'link in the description',
-  'thanks for listening',
-  'thank you for listening',
-  'please like and subscribe',
-  'smash that like button',
-  'follow us on',
-  'check out our',
-  'bye bye',
-  'goodbye',
-  'thank you very much',
-  'have a good day',
-  'have a nice day',
-  'take care',
-  'you',
-  'bye',
+// Whisper hallucinations that appear when audio is near-silent or contains background noise.
+// Exact matches: the entire transcription (after normalizing) equals one of these.
+const JUNK_EXACT = [
+  'you', 'bye', 'bye bye', 'goodbye', 'so', 'the the', 'thank you',
+  'thank you very much', 'thanks', 'okay', 'music', 'dramatic music',
+  'have a good day', 'have a nice day', 'take care',
+];
+
+// Substring matches: if ANY of these appear anywhere in the transcription, it's junk.
+const JUNK_CONTAINS = [
+  'thank you for watching', 'thanks for watching',
+  'please subscribe', 'like and subscribe', 'don\'t forget to subscribe',
+  'hit the bell', 'hit the notification bell',
+  'check out the next video', 'see you in the next video', 'see you next time',
+  'leave a comment below', 'link in the description',
+  'thanks for listening', 'thank you for listening',
+  'please like and subscribe', 'smash that like button',
+  'follow us on', 'check out our',
 ];
 
 function isJunkTranscription(text) {
   const normalized = text.toLowerCase().trim().replace(/[.,!?]/g, '');
   if (normalized.length < 3) return true;
-  return JUNK_PHRASES.some((phrase) => normalized === phrase || normalized.startsWith(phrase));
+  if (JUNK_EXACT.includes(normalized)) return true;
+  return JUNK_CONTAINS.some((phrase) => normalized.includes(phrase));
 }
 
 export async function transcribeChunk(buffer, mimeType = 'audio/webm') {
