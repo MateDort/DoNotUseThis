@@ -2,15 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import RecordingIndicator from './RecordingIndicator.jsx';
 import ChatMessage from './ChatMessage.jsx';
 import ChatInput from './ChatInput.jsx';
+import TranscriptPanel from './TranscriptPanel.jsx';
 import { useAudioRecorder } from '../hooks/useAudioRecorder.js';
 import { useWebSocket } from '../hooks/useWebSocket.js';
 
 export default function RecordingScreen({ onEnd }) {
   const [seconds, setSeconds] = useState(0);
   const [messages, setMessages] = useState([]);
+  const [transcriptChunks, setTranscriptChunks] = useState([]);
+  const [panelOpen, setPanelOpen] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const { connected, sendAudioChunk, sendStudentQuestion, onMessage } = useWebSocket();
+  const { connected, sendAudioChunk, sendStudentQuestion, onMessage, onTranscript } =
+    useWebSocket();
   const { isRecording, start, stop } = useAudioRecorder((chunk) => {
     sendAudioChunk(chunk);
   });
@@ -31,6 +35,15 @@ export default function RecordingScreen({ onEnd }) {
     });
     return unsubscribe;
   }, [onMessage]);
+
+  useEffect(() => {
+    const unsubscribe = onTranscript?.((payload) => {
+      if (payload?.text) {
+        setTranscriptChunks((prev) => [...prev, payload.text]);
+      }
+    });
+    return unsubscribe;
+  }, [onTranscript]);
 
   useEffect(() => {
     start().catch((err) => {
@@ -58,6 +71,12 @@ export default function RecordingScreen({ onEnd }) {
   return (
     <div className="h-screen flex flex-col bg-secondary">
       <RecordingIndicator seconds={seconds} onEnd={handleEnd} />
+
+      <TranscriptPanel
+        open={panelOpen}
+        onToggle={() => setPanelOpen((o) => !o)}
+        chunks={transcriptChunks}
+      />
 
       <div className="flex-1 flex flex-col max-w-2xl w-full mx-auto px-4 py-4 mt-10 overflow-hidden">
         <div className="text-xs text-slate-400 mb-3">

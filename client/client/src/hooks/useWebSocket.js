@@ -38,11 +38,20 @@ export function useWebSocket() {
     };
   };
 
+  const onTranscript = (handler) => {
+    if (!socketRef.current) return;
+    socketRef.current.on('transcript', handler);
+    return () => {
+      socketRef.current.off('transcript', handler);
+    };
+  };
+
   return {
     connected,
     sendAudioChunk,
     sendStudentQuestion,
-    onMessage
+    onMessage,
+    onTranscript
   };
 }
 

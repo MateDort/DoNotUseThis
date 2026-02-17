@@ -6,12 +6,23 @@ const geminiApiKey = process.env.GOOGLE_GEMINI_API_KEY;
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
 export async function answerQuestion(question, transcript) {
-  const contextPrompt = buildPrompt(question, transcript);
+  // Proactively fetch web search results for questions that might benefit from external info
+  let searchResults = '';
+  if (shouldSearchWeb(question, transcript)) {
+    try {
+      searchResults = await webSearch(question);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Proactive web search error', err);
+    }
+  }
+
+  const contextPrompt = buildPrompt(question, transcript, searchResults);
 
   // 1. Try Gemini
   if (genAI) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
       const result = await model.generateContent(contextPrompt);
       const text = result.response.text();
       if (text && text.trim().length > 0) return text.trim();
@@ -30,7 +41,11 @@ export async function answerQuestion(question, transcript) {
       const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'You are a helpful classroom assistant for students.' },
+          {
+            role: 'system',
+            content:
+              'You are a knowledgeable classroom assistant. Combine class context with your own expertise to give thorough, educational answers.'
+          },
           { role: 'user', content: contextPrompt }
         ]
       });
@@ -42,31 +57,89 @@ export async function answerQuestion(question, transcript) {
     }
   }
 
-  // 3. Last resort: web search
-  const web = await webSearch(question);
-  if (web) return web;
+  // 3. Last resort: raw web search summary
+  if (!searchResults) {
+    const web = await webSearch(question);
+    if (web) return web;
+  }
 
   return "I'm not sure how to answer that right now.";
 }
 
-function buildPrompt(question, transcript) {
-  const trimmedTranscript = transcript ? transcript.slice(-4000) : '';
-  return [
-    'You are a classroom assistant. You have access to a live transcript of what was said in class.',
+/**
+ * Decide whether to proactively fetch web search results before calling the LLM.
+ * Returns true for questions about specific facts, current events, definitions,
+ * or topics not well covered by the transcript alone.
+ */
+function shouldSearchWeb(question, transcript) {
+  const q = question.toLowerCase();
+
+  // Always search for questions asking about definitions, specifics, examples, comparisons
+  const factualPatterns = [
+    /what (?:is|are|was|were) /,
+    /define /,
+    /explain /,
+    /how (?:does|do|did|is|are) /,
+    /difference between /,
+    /example of /,
+    /why (?:does|do|did|is|are) /,
+    /when (?:was|were|did|is) /,
+    /who (?:is|are|was|were) /,
+    /tell (?:me|us) about /,
+    /can you (?:explain|describe|tell)/
+  ];
+
+  for (const pattern of factualPatterns) {
+    if (pattern.test(q)) return true;
+  }
+
+  // Search if transcript is short (not much class context yet)
+  const trimmed = transcript ? transcript.trim() : '';
+  if (trimmed.length < 200) return true;
+
+  return false;
+}
+
+function buildPrompt(question, transcript, searchResults) {
+  const trimmedTranscript = transcript ? transcript.slice(-6000) : '';
+  const parts = [
+    'You are an expert classroom assistant with deep knowledge across all subjects.',
+    'You have three sources of information:',
+    '1. A live transcript of what is being discussed in class right now.',
+    '2. Your own extensive knowledge as an AI.',
+    '3. Optional web search results for additional context.',
     '',
-    'IMPORTANT RULES:',
-    '- ALWAYS reference and use the transcript content below when answering.',
-    '- If the student asks what was discussed/talked about, summarize the transcript content.',
-    '- If the transcript contains information relevant to the question, use it.',
-    '- Only use your own general knowledge when the transcript truly has nothing related to the question.',
-    '- Never say "the transcript doesn\'t contain" unless the transcript is literally empty.',
+    'YOUR APPROACH:',
+    '- ALWAYS start by referencing what was discussed in class (the transcript) if it relates to the question.',
+    '- THEN expand on the topic using your own knowledge to give a thorough, educational answer.',
+    '- If web search results are provided, incorporate relevant facts from them too.',
+    '- Blend all sources seamlessly — do not say "according to the transcript" or "according to my knowledge" separately.',
+    '  Instead, give one unified, comprehensive answer.',
+    '- If the question is about what was discussed in class, summarize the transcript AND add helpful context.',
+    '- For factual/technical questions, give a complete answer even if the transcript only briefly mentions the topic.',
+    '- Use clear structure: brief intro, key points, and a takeaway when appropriate.',
     '',
     '--- CLASS TRANSCRIPT (live, may be partial) ---',
     trimmedTranscript || '(empty - class has not started yet)',
-    '--- END TRANSCRIPT ---',
+    '--- END TRANSCRIPT ---'
+  ];
+
+  if (searchResults && searchResults.trim().length > 0) {
+    parts.push(
+      '',
+      '--- WEB SEARCH RESULTS (use to supplement your answer) ---',
+      searchResults,
+      '--- END SEARCH RESULTS ---'
+    );
+  }
+
+  parts.push(
     '',
-    `Student question: "${question}"`,
+    `Question: "${question}"`,
     '',
-    'Give a concise, friendly answer. If summarizing the transcript, quote specific things that were said.'
-  ].join('\n');
+    'Give a thorough, friendly, and educational answer. Combine what was said in class with your own expertise.',
+    'If the transcript mentions the topic, reference it and then go deeper. Keep it concise but complete.'
+  );
+
+  return parts.join('\n');
 }
