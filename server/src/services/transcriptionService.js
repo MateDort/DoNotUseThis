@@ -3,6 +3,43 @@ import { toFile } from 'openai/uploads';
 
 let chunkIndex = 0;
 
+// Common Whisper hallucinations and YouTube/podcast filler phrases to filter out.
+// These appear when the audio is near-silent or contains background noise.
+const JUNK_PHRASES = [
+  'thank you for watching',
+  'thanks for watching',
+  'please subscribe',
+  'like and subscribe',
+  'hit the bell',
+  'hit the notification bell',
+  'check out the next video',
+  'see you in the next video',
+  'see you next time',
+  'don\'t forget to subscribe',
+  'leave a comment below',
+  'link in the description',
+  'thanks for listening',
+  'thank you for listening',
+  'please like and subscribe',
+  'smash that like button',
+  'follow us on',
+  'check out our',
+  'bye bye',
+  'goodbye',
+  'thank you very much',
+  'have a good day',
+  'have a nice day',
+  'take care',
+  'you',
+  'bye',
+];
+
+function isJunkTranscription(text) {
+  const normalized = text.toLowerCase().trim().replace(/[.,!?]/g, '');
+  if (normalized.length < 3) return true;
+  return JUNK_PHRASES.some((phrase) => normalized === phrase || normalized.startsWith(phrase));
+}
+
 export async function transcribeChunk(buffer, mimeType = 'audio/webm') {
   const currentChunkIndex = chunkIndex++;
 
@@ -29,8 +66,13 @@ export async function transcribeChunk(buffer, mimeType = 'audio/webm') {
 
     const text = response.text || '';
 
+    if (isJunkTranscription(text)) {
+      // eslint-disable-next-line no-console
+      console.log('Filtered junk transcription:', text);
+      return '';
+    }
+
     if (text) {
-      // Log each successful chunk so you can see live transcription in the terminal
       // eslint-disable-next-line no-console
       console.log('Transcript chunk:', text);
     }

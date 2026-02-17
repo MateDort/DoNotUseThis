@@ -56,10 +56,10 @@ export default function RecordingScreen({ onEnd }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-secondary">
+    <div className="h-screen flex flex-col bg-secondary">
       <RecordingIndicator seconds={seconds} onEnd={handleEnd} />
 
-      <div className="flex-1 flex flex-col max-w-2xl w-full mx-auto px-4 py-4 overflow-hidden">
+      <div className="flex-1 flex flex-col max-w-2xl w-full mx-auto px-4 py-4 mt-10 overflow-hidden">
         <div className="text-xs text-slate-400 mb-3">
           {connected ? 'Connected to assistant' : 'Connecting...'}
         </div>
