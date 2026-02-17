@@ -1,0 +1,8 @@
+{
+  "name": "classroom-assistant",
+  "private": true,
+  "scripts": {
+    "build": "cd client/client && npm install && npm run build",
+    "start": "cd server && npm install && npm start"
+  }
+}
