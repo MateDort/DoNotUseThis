@@ -44,7 +44,7 @@ export async function answerQuestion(question, transcript) {
           {
             role: 'system',
             content:
-              'You are a knowledgeable classroom assistant. Combine class context with your own expertise to give thorough, educational answers.'
+              'You are a classroom assistant. Answer in 2-4 bullet points max using "•". One short sentence per bullet. No intros, no filler, no paragraphs.'
           },
           { role: 'user', content: contextPrompt }
         ]
@@ -103,21 +103,16 @@ function shouldSearchWeb(question, transcript) {
 function buildPrompt(question, transcript, searchResults) {
   const trimmedTranscript = transcript ? transcript.slice(-6000) : '';
   const parts = [
-    'You are an expert classroom assistant with deep knowledge across all subjects.',
-    'You have three sources of information:',
-    '1. A live transcript of what is being discussed in class right now.',
-    '2. Your own extensive knowledge as an AI.',
-    '3. Optional web search results for additional context.',
+    'You are a classroom assistant. A student needs a QUICK answer they can glance at.',
     '',
-    'YOUR APPROACH:',
-    '- ALWAYS start by referencing what was discussed in class (the transcript) if it relates to the question.',
-    '- THEN expand on the topic using your own knowledge to give a thorough, educational answer.',
-    '- If web search results are provided, incorporate relevant facts from them too.',
-    '- Blend all sources seamlessly — do not say "according to the transcript" or "according to my knowledge" separately.',
-    '  Instead, give one unified, comprehensive answer.',
-    '- If the question is about what was discussed in class, summarize the transcript AND add helpful context.',
-    '- For factual/technical questions, give a complete answer even if the transcript only briefly mentions the topic.',
-    '- Use clear structure: brief intro, key points, and a takeaway when appropriate.',
+    'RULES:',
+    '- Answer in 2-4 bullet points MAX.',
+    '- Each bullet should be ONE short sentence.',
+    '- Use "•" for bullets.',
+    '- No introductions, no conclusions, no filler.',
+    '- If the answer is a simple fact, give ONE bullet.',
+    '- Never write paragraphs. Never start with "Great question" or similar.',
+    '- Blend transcript context with your own knowledge seamlessly.',
     '',
     '--- CLASS TRANSCRIPT (live, may be partial) ---',
     trimmedTranscript || '(empty - class has not started yet)',
@@ -127,7 +122,7 @@ function buildPrompt(question, transcript, searchResults) {
   if (searchResults && searchResults.trim().length > 0) {
     parts.push(
       '',
-      '--- WEB SEARCH RESULTS (use to supplement your answer) ---',
+      '--- WEB SEARCH RESULTS ---',
       searchResults,
       '--- END SEARCH RESULTS ---'
     );
@@ -137,8 +132,7 @@ function buildPrompt(question, transcript, searchResults) {
     '',
     `Question: "${question}"`,
     '',
-    'Give a thorough, friendly, and educational answer. Combine what was said in class with your own expertise.',
-    'If the transcript mentions the topic, reference it and then go deeper. Keep it concise but complete.'
+    'Answer with bullet points only. Be concise.'
   );
 
   return parts.join('\n');

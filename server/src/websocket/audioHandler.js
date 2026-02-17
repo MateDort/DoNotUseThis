@@ -8,25 +8,79 @@ const transcripts = new Map();
 const lastScannedIndex = new Map();
 // Per-socket periodic timer
 const questionTimers = new Map();
+// Sentence-boundary buffer: holds incomplete trailing text between scan cycles
+const pendingText = new Map();
+// Track consecutive empty cycles to flush stale buffers
+const emptyPendingCycles = new Map();
+
+const MAX_STALE_CYCLES = 3; // flush pending buffer after this many cycles with no new text
+
+/**
+ * Split text at the last sentence boundary (.!?).
+ * Returns [complete, remainder] where `complete` contains only
+ * full sentences and `remainder` is the trailing fragment (may be empty).
+ */
+function splitAtSentenceBoundary(text) {
+  const lastIdx = Math.max(
+    text.lastIndexOf('.'),
+    text.lastIndexOf('!'),
+    text.lastIndexOf('?')
+  );
+  if (lastIdx === -1) return ['', text];
+  return [text.slice(0, lastIdx + 1), text.slice(lastIdx + 1).trim()];
+}
 
 export function handleAudioSocket(socket) {
   transcripts.set(socket.id, []);
   lastScannedIndex.set(socket.id, 0);
+  pendingText.set(socket.id, '');
+  emptyPendingCycles.set(socket.id, 0);
 
-  // Periodic question detection: every 5 seconds, scan new transcript chunks
+  // Periodic question detection with sentence-boundary buffering
   const timer = setInterval(async () => {
     const transcript = transcripts.get(socket.id);
     if (!transcript || transcript.length === 0) return;
 
     const startIdx = lastScannedIndex.get(socket.id) || 0;
-    if (startIdx >= transcript.length) return; // nothing new
+    const hasNewChunks = startIdx < transcript.length;
 
-    // Get only the new chunks since last scan
-    const newChunks = transcript.slice(startIdx);
-    const newText = newChunks.join(' ');
-    lastScannedIndex.set(socket.id, transcript.length);
+    // Grab new chunks and combine with any leftover pending text
+    const newChunks = hasNewChunks ? transcript.slice(startIdx) : [];
+    if (hasNewChunks) lastScannedIndex.set(socket.id, transcript.length);
 
-    const questions = detectQuestions(newText);
+    const pending = pendingText.get(socket.id) || '';
+    const combined = [pending, ...newChunks].filter(Boolean).join(' ');
+
+    if (!combined.trim()) return;
+
+    // If no new chunks arrived, track stale cycles to eventually flush
+    if (!hasNewChunks) {
+      const stale = (emptyPendingCycles.get(socket.id) || 0) + 1;
+      emptyPendingCycles.set(socket.id, stale);
+      if (stale < MAX_STALE_CYCLES) return; // wait for more text
+      // Flush: treat whatever we have as complete
+      pendingText.set(socket.id, '');
+      emptyPendingCycles.set(socket.id, 0);
+      // eslint-disable-next-line no-console
+      console.log('Flushing stale pending buffer:', combined);
+    } else {
+      emptyPendingCycles.set(socket.id, 0);
+    }
+
+    // Split at last sentence boundary
+    let textToScan;
+    if (hasNewChunks) {
+      const [complete, remainder] = splitAtSentenceBoundary(combined);
+      pendingText.set(socket.id, remainder);
+      textToScan = complete;
+    } else {
+      // Stale flush — scan everything
+      textToScan = combined;
+    }
+
+    if (!textToScan.trim()) return;
+
+    const questions = detectQuestions(textToScan);
     if (questions.length === 0) return;
 
     // eslint-disable-next-line no-console
@@ -65,6 +119,8 @@ export function handleAudioSocket(socket) {
     questionTimers.delete(socket.id);
     lastScannedIndex.delete(socket.id);
     transcripts.delete(socket.id);
+    pendingText.delete(socket.id);
+    emptyPendingCycles.delete(socket.id);
   });
 
   socket.on('audio_chunk', async (data) => {
