@@ -1,6 +1,7 @@
 import { transcribeChunk } from '../services/transcriptionService.js';
 import { detectQuestions } from '../services/questionDetector.js';
 import { answerQuestion } from '../services/llmService.js';
+import { generateDiagram } from '../services/diagramService.js';
 
 // Per-socket in-memory transcript
 const transcripts = new Map();
@@ -8,6 +9,10 @@ const transcripts = new Map();
 const lastScannedIndex = new Map();
 // Per-socket periodic timer
 const questionTimers = new Map();
+// Diagram state and word-count tracking per socket
+const diagrams = new Map();
+const lastDiagramWordCount = new Map();
+const diagramTimers = new Map();
 // Sentence-boundary buffer: holds incomplete trailing text between scan cycles
 const pendingText = new Map();
 // Track consecutive empty cycles to flush stale buffers
@@ -113,10 +118,38 @@ export function handleAudioSocket(socket) {
 
   questionTimers.set(socket.id, timer);
 
+  // Diagram generation: every 15s, if 30+ new words, generate/evolve diagram
+  const diagramTimer = setInterval(async () => {
+    const transcript = transcripts.get(socket.id);
+    if (!transcript || transcript.length < 2) return;
+
+    const fullTranscript = transcript.join(' ');
+    const wordCount = fullTranscript.split(/\s+/).filter(Boolean).length;
+    const lastCount = lastDiagramWordCount.get(socket.id) ?? 0;
+    if (wordCount - lastCount < 30) return;
+
+    const prevGraph = diagrams.get(socket.id) || { nodes: [], edges: [] };
+    try {
+      const { nodes, edges } = await generateDiagram(fullTranscript, prevGraph);
+      diagrams.set(socket.id, { nodes, edges });
+      lastDiagramWordCount.set(socket.id, wordCount);
+      socket.emit('diagram_update', { nodes, edges });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Diagram generation error', err);
+    }
+  }, 15000);
+  diagramTimers.set(socket.id, diagramTimer);
+
   socket.on('disconnect', () => {
     const t = questionTimers.get(socket.id);
     if (t) clearInterval(t);
     questionTimers.delete(socket.id);
+    const dt = diagramTimers.get(socket.id);
+    if (dt) clearInterval(dt);
+    diagramTimers.delete(socket.id);
+    lastDiagramWordCount.delete(socket.id);
+    diagrams.delete(socket.id);
     lastScannedIndex.delete(socket.id);
     transcripts.delete(socket.id);
     pendingText.delete(socket.id);

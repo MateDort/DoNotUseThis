@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function ChatInput({ onSend, disabled }) {
+export default function ChatInput({ onSend, disabled, embedded }) {
   const [value, setValue] = useState('');
 
   const handleSubmit = (e) => {
@@ -12,7 +12,7 @@ export default function ChatInput({ onSend, disabled }) {
   };
 
   return (
-    <div className="w-full bg-secondary pb-4 pt-2 px-4">
+    <div className={`w-full ${embedded ? 'bg-transparent py-0 px-0' : 'bg-secondary pb-4 pt-2 px-4'}`}>
       <form
         onSubmit={handleSubmit}
         className="max-w-2xl mx-auto flex gap-2 items-center bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-2"

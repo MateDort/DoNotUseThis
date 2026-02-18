@@ -25,9 +25,9 @@ export default function TranscriptPanel({ open, onToggle, chunks }) {
           open ? 'translate-x-0' : '-translate-x-[340px]'
         }`}
       >
-        {/* Panel content */}
-        <div className="w-[340px] h-full bg-white shadow-xl flex flex-col border-r border-slate-200">
-          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        {/* Panel content — slightly transparent with backdrop blur so whiteboard shows through */}
+        <div className="w-[340px] h-full bg-white/95 backdrop-blur-sm shadow-xl flex flex-col border-r border-slate-200">
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50/95 backdrop-blur-sm">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
               <span className="text-sm font-semibold text-slate-700">
